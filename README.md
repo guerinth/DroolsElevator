@@ -25,5 +25,9 @@ Here is what you need to build and run a code elevator session :
 ### Steps
 
 $ git clone https://github.com/guerinth/DroolsElevator.git
+
 $ cd DroolsElevator
+
 $ mvn clean install
+
+$ mvn exec:java -Dexec.mainClass="com.gop.contest.ascenseur.ParticipantServer"
