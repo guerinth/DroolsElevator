@@ -1,0 +1,64 @@
+package com.gop.contest.ascenseur.model
+
+import com.gop.contest.ascenseur.CommandEnum
+
+declare PersonneEvent
+   @role(event)
+   @expires(1s)
+end 
+declare Tick
+   @role(event)
+   @expires(1s)
+end 
+
+dialect "mvel" 
+
+rule "Une personne est sortie" no-loop true when
+	$e : PersonneEvent() from entry-point "SortieStream"
+	$a : Ascenseur (id == $e.cabin)
+	$p : Personne  (etageCible == $a.etageEnCours)
+then
+	modify ($a) { personnes.remove($p) }
+	retract($p)
+	retract($e)
+end
+
+rule "Une personne est entrée" no-loop true when
+	$e : PersonneEvent() from entry-point "EntreeStream"
+	$a : Ascenseur (id == $e.cabin)
+	$p : Personne  (ascenseur == null, etageAppel == $a.etageEnCours)
+then
+	modify  ($a) { personnes.add($p) }
+	modify  ($p) { ascenseur = $a	 }
+	retract ($e)
+end
+
+rule "L'utilisateur sélectionne un étage" no-loop true when
+	$e : PersonneEvent() from entry-point "ChoixEtageStream"
+	$a : Ascenseur (id == $e.cabin)
+	$p : Personne  (ascenseur == $a, etageCible == null)
+then
+	modify ($p) { etageCible = $e.floorToGo }
+	retract($e)
+end
+
+
+rule "Déclenche l'évaluation des règles" no-loop true when
+	$e : Tick() from entry-point "NextCommandStream"
+	$a : Ascenseur ()
+then
+	int etage = 0;
+	if ($a.getEtat() == CommandEnum.UP) etage = 1;
+	else if ($a.getEtat() == CommandEnum.DOWN) etage = -1;
+	modify($a) {
+		etageEnCours = $a.getEtageEnCours() + etage,
+		etatCalcule = false;
+	}
+	retract($e)
+end
+
+// Cette requète est appelée en Java à chaque tour : on liste les ascenseurs pour récupérer leur état.
+
+query "QuelSontlesOrdres" ()
+    $ascenseur : Ascenseur ()
+end

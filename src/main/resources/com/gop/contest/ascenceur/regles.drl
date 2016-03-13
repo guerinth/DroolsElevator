@@ -1,0 +1,84 @@
+package com.gop.contest.ascenseur.model
+
+import com.gop.contest.ascenseur.CommandEnum
+import com.gop.contest.ascenseur.DirectionEnum
+
+dialect "mvel" 
+
+// -------------------------- OPEN -------------------------------------------
+rule "Ouverture porte - étage atteint" no-loop true when
+	$a : Ascenseur (etatCalcule == false, etat != CommandEnum.OPEN)
+	exists Personne (ascenseur == $a, etageCible == $a.etageEnCours)
+then
+	modify($a) { etat = CommandEnum.OPEN, etatPorte = CommandEnum.OPEN, etatCalcule = true }
+end
+rule "Ouverture porte - une personne attend à cet étage" no-loop true  when
+	$a : Ascenseur (etatCalcule == false, etat != CommandEnum.OPEN, personnes.size < capaciteMax)
+	not  Ascenseur (this != $a, etat == CommandEnum.OPEN, etageEnCours == $a.etageEnCours, personnes.size < capaciteMax)
+	exists Personne (ascenseur == null, etageAppel == $a.etageEnCours, 
+		(directionCible == DirectionEnum.UP   && $a.etat == CommandEnum.UP) ||
+		(directionCible == DirectionEnum.DOWN && $a.etat == CommandEnum.DOWN) || $a.personnes.size == 0
+		 || etageAppel == $a.etageMin || etageAppel == $a.etageMax )
+then
+	modify($a) { etat = CommandEnum.OPEN, etatPorte = CommandEnum.OPEN, etatCalcule = true }
+end
+
+// -------------------------- CLOSE -------------------------------------------
+rule "Fermeture porte" no-loop true when
+	$a : Ascenseur (etatCalcule == false, etat == CommandEnum.OPEN)
+	not Personne (ascenseur == $a, etageCible == $a.etageEnCours)
+then
+	modify($a) { etat = CommandEnum.CLOSE, etatPorte = CommandEnum.CLOSE, etatCalcule = true }
+end
+
+// -------------------------- UP -------------------------------------------
+rule "Monter à l'étage demandé" no-loop true when
+	$a : Ascenseur (etatCalcule == false, etat == CommandEnum.CLOSE || == CommandEnum.NOTHING)
+	$p : Personne (ascenseur == $a, etageCible > $a.etageEnCours)
+	not Personne (ascenseur == $a, etageCible < $a.etageEnCours, $a.etageEnCours - etageCible < $p.etageCible - $a.etageEnCours)
+then
+	modify($a) { etat = CommandEnum.UP, etatCalcule = true }
+end
+rule "Monter vers l'appel" no-loop true when
+	$a : Ascenseur (etatCalcule == false, etat == CommandEnum.CLOSE || etat == CommandEnum.NOTHING || == CommandEnum.DOWN)
+	$p : Personne (ascenseur == null, etageAppel > $a.etageEnCours)
+	not Personne (ascenseur == null, etageAppel < $a.etageEnCours, $a.etageEnCours - etageAppel < $p.etageAppel - $a.etageEnCours)
+	not Personne (ascenseur == $a)
+then
+	modify ($a) { etat = CommandEnum.UP, etatCalcule = true }
+end
+
+// -------------------------- DOWN -------------------------------------------
+rule "Descendre à l'étage demandé" no-loop true when
+	$a : Ascenseur (etatCalcule == false, etat == CommandEnum.CLOSE || == CommandEnum.NOTHING)
+	$p : Personne (ascenseur == $a, etageCible < $a.etageEnCours)
+	not Personne (ascenseur == $a, etageCible > $a.etageEnCours, etageCible - $a.etageEnCours < $a.etageEnCours - $p.etageCible)
+then
+	modify ($a) { etat = CommandEnum.DOWN, etatCalcule = true }
+end
+rule "Descendre vers l'appel" no-loop true when
+	$a : Ascenseur (etatCalcule == false, etat == CommandEnum.CLOSE || == CommandEnum.NOTHING || == CommandEnum.UP)
+	$p : Personne (ascenseur == null, etageAppel < $a.etageEnCours) // quelqu'un en bas appelle
+	not Personne (ascenseur == null, etageAppel > $a.etageEnCours, etageAppel - $a.etageEnCours < $a.etageEnCours - $p.etageAppel)
+	not Personne (ascenseur == $a) // personne dans l'ascenseur
+then
+	modify ($a) { etat = CommandEnum.DOWN, etatCalcule = true }
+end
+
+// -------------------------- WAIT -------------------------------------------
+rule "Mise en attente" no-loop true when
+	$a : Ascenseur (etatCalcule == false, personnes.size == 0, etat != CommandEnum.NOTHING, etageEnCours == ((etageMax - etageMin + 1) / 2)+ $a.etageMin)
+	not Personne (ascenseur == null)
+then
+	modify ($a) { etat = CommandEnum.NOTHING, etatCalcule = true }
+end
+rule "Mise en attente à l'étage moyen" no-loop true when
+	$a : Ascenseur (etatCalcule == false, personnes.size == 0, etat != CommandEnum.NOTHING,
+					etageEnCours != (((etageMax - etageMin + 1) / 2)+ $a.etageMin))
+	not Personne (ascenseur == null)
+then
+	modify($a) {
+		etat = $a.etageEnCours < ((($a.etageMax - $a.etageMin + 1) / 2) + $a.etageMin)  ? CommandEnum.UP : CommandEnum.DOWN,
+		etatCalcule = true
+	}
+end
