@@ -1,11 +1,10 @@
 # DroolsElevator
-Elevator Engine with JBoss Drools
+Elevator Engine with JBoss Drools 6
 
 The goal of the game is to implement an elevator engine.
 
-HTTP GET requests will be send to this server.
+HTTP GET requests will be send to this server :
 
-Events received :
 - /call?atFloor=[-4-40]&to=[UP|DOWN]
 - /go?floorToGo=[-4-40]
 - /userHasEntered?cabin=[1-4]
@@ -27,6 +26,6 @@ Here is what you need to build and run a code elevator session :
 ```
 $ git clone https://github.com/guerinth/DroolsElevator.git
 $ cd DroolsElevator
-$ mvn clean install
+$ mvn clean package
 $ java -jar target\ascenseur-0.0.1-SNAPSHOT.jar
 ```
